@@ -9,8 +9,9 @@ if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project(libhaze LANGUAGES C CXX)
+include(GNUInstallDirs)
 
-add_library(libhaze
+add_library(haze STATIC
     ${libhaze_SOURCE_DIR}/source/async_usb_server.cpp
     ${libhaze_SOURCE_DIR}/source/device_properties.cpp
     ${libhaze_SOURCE_DIR}/source/event_reactor.cpp
@@ -25,9 +26,9 @@ add_library(libhaze
     ${libhaze_SOURCE_DIR}/source/log.cpp
 )
 
-target_include_directories(libhaze PUBLIC ${libhaze_SOURCE_DIR}/include)
+target_include_directories(haze PUBLIC ${libhaze_SOURCE_DIR}/include)
 
-set_target_properties(libhaze PROPERTIES
+set_target_properties(haze PROPERTIES
     C_STANDARD 11
     C_EXTENSIONS ON
     CXX_STANDARD 20
@@ -37,34 +38,20 @@ set_target_properties(libhaze PROPERTIES
     COMPILE_OPTIONS "$<$<CONFIG:Debug>:-Os>"
 )
 
-target_compile_options(libhaze PRIVATE
+target_compile_options(haze PRIVATE
     -Wall
     -Wno-tautological-compare
 )
 
-if (BUILD_EXAMPLES)
-    add_executable(libhaze-example example/source/main.cpp)
+# Install the library
+install(
+	TARGETS haze
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
 
-    target_link_libraries(libhaze-example PRIVATE libhaze)
-
-    set_target_properties(libhaze-example PROPERTIES
-        C_STANDARD 11
-        C_EXTENSIONS ON
-        CXX_STANDARD 20
-        CXX_EXTENSIONS ON
-    )
-
-    target_compile_options(libhaze-example PRIVATE
-        -Wall
-    )
-
-    nx_generate_nacp(libhaze-example.nacp
-        NAME "libhaze-example"
-        AUTHOR "TotalJustice"
-        VERSION 2.0.0
-    )
-
-    nx_create_nro(libhaze-example
-        NACP libhaze-example.nacp
-    )
-endif()
+# Install headers
+install(
+    FILES ${PROJECT_SOURCE_DIR}/include/haze.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    RENAME haze.h
+)
