@@ -51,7 +51,7 @@ namespace haze {
                 log_write("Added cancel event to reactor\n");
 
                 /* Create and start thread. */
-                sphaira::utils::CreateThread(&m_thread, thread_func, this);
+                R_DISCARD(sphaira::utils::CreateThread(&m_thread, thread_func, this));
                 threadStart(&m_thread);
                 log_write("Started main loop thread\n");
             }
@@ -71,7 +71,7 @@ namespace haze {
 
                 /* Configure the PTP responder. */
                 PtpResponder ptp_responder{m_callback};
-                ptp_responder.Initialize(std::addressof(m_event_reactor), std::addressof(ptp_object_heap), m_entries, m_vid, m_pid);
+                R_DISCARD(ptp_responder.Initialize(std::addressof(m_event_reactor), std::addressof(ptp_object_heap), m_entries, m_vid, m_pid));
                 log_write("Initialized PTP responder\n");
 
                 /* Ensure we maintain a clean state on exit. */
@@ -83,7 +83,7 @@ namespace haze {
 
                 /* Begin processing requests. */
                 log_write("Beginning request processing\n");
-                ptp_responder.LoopProcess();
+                R_DISCARD(ptp_responder.LoopProcess());
             }
 
             static void thread_func(void* user) {

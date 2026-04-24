@@ -511,7 +511,7 @@ namespace haze {
         /* Truncate the file to the received size. */
         ON_SCOPE_EXIT{
             if (offset < expected_file_size) {
-                Fs(obj).SetFileSize(std::addressof(file), offset);
+                R_DISCARD(Fs(obj).SetFileSize(std::addressof(file), offset));
             }
         };
 

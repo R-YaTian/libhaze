@@ -31,7 +31,7 @@ target_include_directories(haze PUBLIC ${libhaze_SOURCE_DIR}/include)
 set_target_properties(haze PROPERTIES
     C_STANDARD 11
     C_EXTENSIONS ON
-    CXX_STANDARD 20
+    CXX_STANDARD 23
     CXX_EXTENSIONS ON
     # force optimisations in debug mode as otherwise vapor errors
     # due to force_inline attribute failing...

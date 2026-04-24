@@ -53,7 +53,7 @@ namespace ams {
                     return (v >> ofs) & ~(~BaseType() << num);
                 }
             public:
-                static constexpr ALWAYS_INLINE BaseType MakeValue(BaseType module, BaseType description) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType MakeValue(BaseType module, BaseType description) {
                     return (module) | (description << ModuleBits);
                 }
 
@@ -63,36 +63,35 @@ namespace ams {
                     static_assert(description < (1 << DescriptionBits), "Invalid Description");
                 };
 
-                static constexpr ALWAYS_INLINE BaseType GetModuleFromValue(BaseType value) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType GetModuleFromValue(BaseType value) {
                     return GetBitsValue(value, 0, ModuleBits);
                 }
 
-                static constexpr ALWAYS_INLINE BaseType GetDescriptionFromValue(BaseType value) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType GetDescriptionFromValue(BaseType value) {
                     return GetBitsValue(value, ModuleBits, DescriptionBits);
                 }
 
-                static constexpr ALWAYS_INLINE BaseType GetReservedFromValue(BaseType value) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType GetReservedFromValue(BaseType value) {
                     return GetBitsValue(value, ModuleBits + DescriptionBits, ReservedBits);
                 }
 
-                static constexpr ALWAYS_INLINE BaseType MaskReservedFromValue(BaseType value) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType MaskReservedFromValue(BaseType value) {
                     return value & ~(~(~BaseType() << ReservedBits) << (ModuleBits + DescriptionBits));
                 }
 
-                static constexpr ALWAYS_INLINE BaseType MergeValueWithReserved(BaseType value, BaseType reserved) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE BaseType MergeValueWithReserved(BaseType value, BaseType reserved) {
                     return (value << 0) | (reserved << (ModuleBits + DescriptionBits));
                 }
         };
 
         /* Use CRTP for Results. */
-        template<typename Self>
         class ResultBase {
             public:
                 using BaseType = typename ResultTraits::BaseType;
                 static constexpr BaseType SuccessValue = ResultTraits::SuccessValue;
             public:
-                constexpr ALWAYS_INLINE BaseType GetModule() const { return ResultTraits::GetModuleFromValue(static_cast<const Self *>(this)->GetValue()); }
-                constexpr ALWAYS_INLINE BaseType GetDescription() const { return ResultTraits::GetDescriptionFromValue(static_cast<const Self *>(this)->GetValue()); }
+                [[nodiscard]] constexpr ALWAYS_INLINE BaseType GetModule(this auto const &self) { return ResultTraits::GetModuleFromValue(self.GetValue()); }
+                [[nodiscard]] constexpr ALWAYS_INLINE BaseType GetDescription(this auto const &self) { return ResultTraits::GetDescriptionFromValue(self.GetValue()); }
         };
 
         class ResultInternalAccessor;
@@ -101,10 +100,10 @@ namespace ams {
 
     class ResultSuccess;
 
-    class Result final : public result::impl::ResultBase<Result> {
+    class [[nodiscard]] Result final : public result::impl::ResultBase {
         friend class result::impl::ResultInternalAccessor;
         public:
-            using Base = typename result::impl::ResultBase<Result>;
+            using Base = typename result::impl::ResultBase;
         private:
             typename Base::BaseType m_value;
         private:
@@ -116,16 +115,17 @@ namespace ams {
             constexpr ALWAYS_INLINE Result(typename Base::BaseType v) : m_value(v) { static_assert(std::is_same<typename Base::BaseType, ::Result>::value); }
 
             constexpr ALWAYS_INLINE operator ResultSuccess() const;
-            static constexpr ALWAYS_INLINE bool CanAccept(Result) { return true; }
 
-            constexpr ALWAYS_INLINE bool IsSuccess() const { return m_value == Base::SuccessValue; }
-            constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
-            constexpr ALWAYS_INLINE typename Base::BaseType GetModule() const { return Base::GetModule(); }
-            constexpr ALWAYS_INLINE typename Base::BaseType GetDescription() const { return Base::GetDescription(); }
+            [[nodiscard]] static constexpr ALWAYS_INLINE bool CanAccept(Result) { return true; }
 
-            constexpr ALWAYS_INLINE typename Base::BaseType GetInnerValue() const { return ::ams::result::impl::ResultTraits::MaskReservedFromValue(m_value); }
+            [[nodiscard]] constexpr ALWAYS_INLINE bool IsSuccess() const { return m_value == Base::SuccessValue; }
+            [[nodiscard]] constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
+            [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetModule() const { return Base::GetModule(); }
+            [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetDescription() const { return Base::GetDescription(); }
 
-            constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return m_value; }
+            [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetInnerValue() const { return ::ams::result::impl::ResultTraits::MaskReservedFromValue(m_value); }
+
+            [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return m_value; }
     };
     static_assert(sizeof(Result) == sizeof(Result::Base::BaseType), "sizeof(Result) == sizeof(Result::Base::BaseType)");
     static_assert(std::is_trivially_destructible<Result>::value, "std::is_trivially_destructible<Result>::value");
@@ -138,36 +138,36 @@ namespace ams {
 
         class ResultInternalAccessor {
             public:
-                static constexpr ALWAYS_INLINE Result MakeResult(ResultTraits::BaseType value) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE Result MakeResult(ResultTraits::BaseType value) {
                     return Result(value);
                 }
 
-                static constexpr ALWAYS_INLINE ResultTraits::BaseType GetReserved(Result result) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE ResultTraits::BaseType GetReserved(Result result) {
                     return ResultTraits::GetReservedFromValue(result.m_value);
                 }
 
-                static constexpr ALWAYS_INLINE Result MergeReserved(Result result, ResultTraits::BaseType reserved) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE Result MergeReserved(Result result, ResultTraits::BaseType reserved) {
                     return Result(ResultTraits::MergeValueWithReserved(ResultTraits::MaskReservedFromValue(result.m_value), reserved));
                 }
         };
 
-        constexpr ALWAYS_INLINE Result MakeResult(ResultTraits::BaseType value) {
+        [[nodiscard]] constexpr ALWAYS_INLINE Result MakeResult(ResultTraits::BaseType value) {
             return ResultInternalAccessor::MakeResult(value);
         }
 
     }
 
-    class ResultSuccess final : public result::impl::ResultBase<ResultSuccess> {
+    class ResultSuccess final : public result::impl::ResultBase {
         public:
-            using Base = typename result::impl::ResultBase<ResultSuccess>;
+            using Base = typename result::impl::ResultBase;
         public:
             constexpr ALWAYS_INLINE operator Result() const { return result::impl::MakeResult(Base::SuccessValue); }
-            static constexpr ALWAYS_INLINE bool CanAccept(Result result) { return result.IsSuccess(); }
+            [[nodiscard]] static constexpr ALWAYS_INLINE bool CanAccept(Result result) { return result.IsSuccess(); }
 
-            constexpr ALWAYS_INLINE bool IsSuccess() const { return true; }
-            constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
+            [[nodiscard]] constexpr ALWAYS_INLINE bool IsSuccess() const { return true; }
+            [[nodiscard]] constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
 
-            constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return Base::SuccessValue; }
+            [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return Base::SuccessValue; }
     };
 
     namespace result::impl {
@@ -189,9 +189,9 @@ namespace ams {
     namespace result::impl {
 
         template<ResultTraits::BaseType _Module, ResultTraits::BaseType _Description>
-        class ResultErrorBase : public ResultBase<ResultErrorBase<_Module, _Description>> {
+        class ResultErrorBase : public ResultBase {
             public:
-                using Base = typename result::impl::ResultBase<ResultErrorBase<_Module, _Description>>;
+                using Base = typename result::impl::ResultBase;
                 static constexpr typename Base::BaseType Module = _Module;
                 static constexpr typename Base::BaseType Description = _Description;
                 static constexpr typename Base::BaseType Value = ResultTraits::MakeStaticValue<Module, Description>::value;
@@ -204,10 +204,10 @@ namespace ams {
                     return ResultSuccess();
                 }
 
-                constexpr ALWAYS_INLINE bool IsSuccess() const { return false; }
-                constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
+                [[nodiscard]] constexpr ALWAYS_INLINE bool IsSuccess() const { return false; }
+                [[nodiscard]] constexpr ALWAYS_INLINE bool IsFailure() const { return !this->IsSuccess(); }
 
-                constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return Value; }
+                [[nodiscard]] constexpr ALWAYS_INLINE typename Base::BaseType GetValue() const { return Value; }
         };
 
         template<ResultTraits::BaseType _Module, ResultTraits::BaseType DescStart, ResultTraits::BaseType DescEnd>
@@ -224,7 +224,7 @@ namespace ams {
                 static constexpr typename ResultTraits::BaseType StartValue = ResultTraits::MakeStaticValue<Module, DescriptionStart>::value;
                 static constexpr typename ResultTraits::BaseType EndValue = ResultTraits::MakeStaticValue<Module, DescriptionEnd>::value;
             public:
-                static constexpr ALWAYS_INLINE bool Includes(Result result) {
+                [[nodiscard]] static constexpr ALWAYS_INLINE bool Includes(Result result) {
                     if constexpr (UseDirectValueComparison) {
                         const auto inner_value = result.GetInnerValue();
                         if constexpr (StartValue == EndValue) {
@@ -451,6 +451,9 @@ namespace ams::result::impl {
             R_THROW(_tmp_r_try_rc);                                           \
         }                                                                     \
     }
+
+/// Explicitly discards the result returned by an expression.
+#define R_DISCARD(res_expr) (static_cast<void>(res_expr))
 
 #if defined(ATMOSPHERE_BOARD_NINTENDO_NX) && defined(ATMOSPHERE_IS_STRATOSPHERE) && !defined(AMS_ENABLE_DETAILED_ASSERTIONS) && !defined(AMS_BUILD_FOR_DEBUGGING) && !defined(AMS_BUILD_FOR_AUDITING)
     #define AMS_CALL_ON_RESULT_ASSERTION_IMPL(cond, val) do { ::ams::diag::impl::FatalErrorByResultForNx(val); AMS_INFINITE_LOOP(); AMS_ASSUME(false); } while (false)

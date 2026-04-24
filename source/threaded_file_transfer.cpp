@@ -91,14 +91,14 @@ struct ThreadData {
     void WakeAllThreads();
 
     void SetReadResult(Result result) {
-        read_result = result;
+        R_DISCARD(read_result = result);
         if (R_FAILED(result)) {
             ueventSignal(&uevent);
         }
     }
 
     void SetWriteResult(Result result) {
-        write_result = result;
+        R_DISCARD(write_result = result);
         ueventSignal(&uevent);
     }
 
