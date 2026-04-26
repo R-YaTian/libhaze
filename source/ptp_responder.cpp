@@ -126,6 +126,10 @@ namespace haze {
                 log_write("Error: Invalid argument.\n");
                 R_TRY(this->WriteResponse(PtpResponseCode_GeneralError));
             }
+            R_CATCH(haze::ResultDeviceBusy) {
+                log_write("Error: Device busy.\n");
+                R_TRY(this->WriteResponse(PtpResponseCode_DeviceBusy));
+            }
             R_CATCH_MODULE(fs) {
                 /* Errors from fs are typically recoverable. */
                 log_write("Filesystem error: 0x%08x\n", R_CURRENT_RESULT.GetValue());
