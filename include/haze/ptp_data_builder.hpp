@@ -21,6 +21,25 @@
 
 namespace haze {
 
+    NX_INLINE std::u16string UTF8toUTF16(const char *src)
+    {
+        ssize_t units = 0;
+        units = utf8_to_utf16(nullptr, reinterpret_cast<const u8*>(src), 0);
+        if (units <= 0)
+        {
+            return u"";
+        }
+
+        std::u16string dst(units, '\0');
+        units = utf8_to_utf16(reinterpret_cast<u16*>(&dst[0]), reinterpret_cast<const u8*>(src), dst.size());
+        if (units <= 0)
+        {
+            return u"";
+        }
+
+        return dst;
+    }
+
     class PtpDataBuilder final {
         private:
             AsyncUsbServer *m_server;

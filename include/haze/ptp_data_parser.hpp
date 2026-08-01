@@ -102,18 +102,38 @@ namespace haze {
             Result ReadString(char *out_string) {
                 u8 len;
                 R_TRY(this->Read(std::addressof(len)));
+                u16 *tmp_string = new u16[len + 1];
+
+                ON_SCOPE_EXIT {
+                    delete[] tmp_string;
+                };
 
                 /* Read characters one by one. */
                 for (size_t i = 0; i < len; i++) {
                     u16 chr;
                     R_TRY(this->Read(std::addressof(chr)));
 
-                    *out_string++ = static_cast<char>(chr);
+                    tmp_string[i] = chr;
                 }
 
                 /* Write null terminator. */
-                *out_string++ = '\x00';
+                tmp_string[len] = u'\0';
 
+                /* Try convert UTF-16 to UTF-8. */
+                ssize_t units = 0;
+                units = utf16_to_utf8(nullptr, reinterpret_cast<const u16*>(tmp_string), 0);
+                if (units > 0 && units < 256) {
+                    units = utf16_to_utf8(reinterpret_cast<u8*>(out_string), reinterpret_cast<const u16*>(tmp_string), units);
+                    if (units > 0) {
+                        out_string[units] = '\x00';
+                        R_SUCCEED();
+                    }
+                }
+
+                /* Fallback: just copy the UTF-16 string as bytes. */
+                for (size_t i = 0; i <= len; i++) {
+                    *out_string++ = static_cast<char>(tmp_string[i]);
+                }
                 R_SUCCEED();
             }
     };

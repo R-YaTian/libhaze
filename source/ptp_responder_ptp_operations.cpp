@@ -306,7 +306,13 @@ namespace haze {
             R_TRY(db.Add(object_info.association_type));
             R_TRY(db.Add(object_info.association_desc));
             R_TRY(db.Add(object_info.sequence_number));
-            R_TRY(db.AddString(object_info.filename));
+            const char *filename = object_info.filename;
+            std::u16string filename_utf16 = UTF8toUTF16(filename);
+            if (filename_utf16 == u"") {
+                R_TRY(db.AddString(filename));
+            } else {
+                R_TRY(db.AddString(filename_utf16.c_str()));
+            }
             R_TRY(db.AddString(object_info.capture_date));
             R_TRY(db.AddString(object_info.modification_date));
             R_TRY(db.AddString(object_info.keywords));
