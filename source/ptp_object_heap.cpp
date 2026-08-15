@@ -23,7 +23,7 @@ namespace haze {
         /* Original Haze allocates the entire heap as there's no reason not to. */
         /* As we are a library, we want to allocate as little as possible. */
         static constexpr u32 MaxHeapBlock = 20_MB;
-
+        static constexpr u32 AppletMaxHeapBlock = 10_MB;
     }
 
     void PtpObjectHeap::Initialize() {
@@ -42,7 +42,7 @@ namespace haze {
         HAZE_ASSERT(m_heap_block_size > 0);
 
         /* Allocate the memory. */
-        m_heap_block_size = std::min(MaxHeapBlock, m_heap_block_size);
+        m_heap_block_size = std::min(appletGetAppletType() == AppletType_LibraryApplet ? AppletMaxHeapBlock : MaxHeapBlock, m_heap_block_size);
         log_write("Allocating %u bytes for each of %zu heap blocks\n", m_heap_block_size, NumHeapBlocks);
         for (size_t i = 0; i < NumHeapBlocks; i++) {
             m_heap_blocks[i] = std::malloc(m_heap_block_size);
