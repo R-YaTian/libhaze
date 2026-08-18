@@ -504,7 +504,7 @@ namespace haze {
             expected_file_size = file_size;
             log_write("File size from property list: %ld\n", file_size);
         } else {
-            if (data_header.length > sizeof(PtpUsbBulkContainer)) {
+            if (data_header.length >= sizeof(PtpUsbBulkContainer)) {
                 /* Got the real file size. */
                 file_size = data_header.length - sizeof(PtpUsbBulkContainer);
                 expected_file_size = file_size;

@@ -271,12 +271,12 @@ Result ThreadData::readFuncInternal() {
 
         u64 bytes_read{};
         R_TRY(this->Read(buf.data() + buf_offset, read_size, std::addressof(bytes_read)));
-        if (!bytes_read) {
-            break;
-        }
 
         // resize to actual read size.
         buf.resize(buf_offset + bytes_read);
+        if (!bytes_read) {
+            break;
+        }
 
         // when we have left slow mode, flush.
         // todo: check buffer size so that it doesn't grow too large.
