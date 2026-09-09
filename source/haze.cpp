@@ -53,7 +53,7 @@ std::unique_ptr<haze::ConsoleMainLoop> g_haze{};
     return 0;
 }
 
-bool Initialize(Callback callback, const FsEntries& entries, u16 vid, u16 pid, bool enable_log) {
+bool Initialize(Callback callback, const FsEntries& entries, u16 vid, u16 pid, const std::string &device_description, bool enable_log) {
     std::scoped_lock lock{g_mutex};
     if (g_haze) {
         return false;
@@ -64,7 +64,7 @@ bool Initialize(Callback callback, const FsEntries& entries, u16 vid, u16 pid, b
     }
 
     /* Load device firmware version and serial number. */
-    HAZE_R_ABORT_UNLESS(haze::LoadDeviceProperties());
+    HAZE_R_ABORT_UNLESS(haze::LoadDeviceProperties(device_description));
 
     g_haze = std::make_unique<haze::ConsoleMainLoop>(callback, entries, vid, pid, enable_log);
 

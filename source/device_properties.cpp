@@ -21,10 +21,11 @@ namespace haze {
 
         constinit SetSysSerialNumber g_serial_number = {};
         constinit SetSysFirmwareVersion g_firmware_version = {};
+        std::string g_device_description{};
 
     }
 
-    Result LoadDeviceProperties() {
+    Result LoadDeviceProperties(const std::string &device_description) {
         /* Initialize set:sys. */
         R_TRY(setsysInitialize());
 
@@ -34,6 +35,7 @@ namespace haze {
         /* Get the serial number and firmware version. */
         R_TRY(setsysGetSerialNumber(std::addressof(g_serial_number)));
         R_TRY(setsysGetFirmwareVersion(std::addressof(g_firmware_version)));
+        g_device_description = device_description + " HOS: " + g_firmware_version.display_version;
 
         /* We succeeded. */
         R_SUCCEED();
@@ -47,4 +49,7 @@ namespace haze {
         return g_firmware_version.display_version;
     }
 
+    const char *GetDeviceDescription() {
+        return g_device_description.c_str();
+    }
 }

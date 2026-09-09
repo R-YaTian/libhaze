@@ -38,7 +38,7 @@ namespace haze {
             R_TRY(db.AddArray(SupportedPlaybackFormats, util::size(SupportedPlaybackFormats)));
             R_TRY(db.AddString(MtpDeviceManufacturer));
             R_TRY(db.AddString(MtpDeviceModel));
-            R_TRY(db.AddString(GetFirmwareVersion()));
+            R_TRY(db.AddString(GetDeviceDescription()));
             R_TRY(db.AddString(GetSerialNumber()));
 
             R_SUCCEED();
