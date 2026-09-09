@@ -122,7 +122,7 @@ namespace haze {
         this->UnregisterObject(object);
 
         /* Free the object. */
-        m_object_heap->Deallocate(object, sizeof(PtpObject) + std::strlen(object->GetName()) + 1);
+        m_object_heap->Deallocate(object, sizeof(PtpObject) + util::Strlen(object->GetName()) + 1);
     }
 
     Result PtpObjectDatabase::CreateAndRegisterObjectId(const char *parent_name, const char *name, u32 parent_id, u32 storage_id, u32 *out_object_id) {

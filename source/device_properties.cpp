@@ -14,6 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <haze.hpp>
+#include <cstring>
 
 namespace haze {
 
@@ -21,11 +22,11 @@ namespace haze {
 
         constinit SetSysSerialNumber g_serial_number = {};
         constinit SetSysFirmwareVersion g_firmware_version = {};
-        std::string g_device_description{};
+        char *g_device_description = nullptr;
 
     }
 
-    Result LoadDeviceProperties(const std::string &device_description) {
+    Result LoadDeviceProperties(const char *device_description) {
         /* Initialize set:sys. */
         R_TRY(setsysInitialize());
 
@@ -35,7 +36,15 @@ namespace haze {
         /* Get the serial number and firmware version. */
         R_TRY(setsysGetSerialNumber(std::addressof(g_serial_number)));
         R_TRY(setsysGetFirmwareVersion(std::addressof(g_firmware_version)));
-        g_device_description = device_description + " HOS: " + g_firmware_version.display_version;
+
+        constexpr auto separator = " HOS/";
+        const size_t separator_length = util::Strlen(separator);
+        const size_t description_length = util::Strlen(device_description);
+        delete[] g_device_description;
+        g_device_description = new char[description_length + separator_length + sizeof(g_firmware_version.display_version) + 1]{};
+        std::memcpy(g_device_description, device_description, description_length);
+        std::memcpy(g_device_description + description_length, separator, separator_length);
+        std::memcpy(g_device_description + description_length + separator_length, g_firmware_version.display_version, sizeof(g_firmware_version.display_version));
 
         /* We succeeded. */
         R_SUCCEED();
@@ -50,6 +59,6 @@ namespace haze {
     }
 
     const char *GetDeviceDescription() {
-        return g_device_description.c_str();
+        return g_device_description;
     }
 }

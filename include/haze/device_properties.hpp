@@ -14,11 +14,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #pragma once
-#include <string>
 
 namespace haze {
 
-    Result LoadDeviceProperties(const std::string &device_description);
+    Result LoadDeviceProperties(const char *device_description);
 
     const char *GetSerialNumber();
 
