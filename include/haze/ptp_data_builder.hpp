@@ -21,20 +21,22 @@
 
 namespace haze {
 
-    NX_INLINE std::u16string UTF8toUTF16(const char *src)
+    NX_INLINE char16_t *UTF8toUTF16(const char *src)
     {
         ssize_t units = 0;
         units = utf8_to_utf16(nullptr, reinterpret_cast<const u8*>(src), 0);
         if (units <= 0)
         {
-            return u"";
+            return nullptr;
         }
 
-        std::u16string dst(units, '\0');
-        units = utf8_to_utf16(reinterpret_cast<u16*>(&dst[0]), reinterpret_cast<const u8*>(src), dst.size());
+        char16_t *dst = new char16_t[units + 1]{};
+
+        units = utf8_to_utf16(reinterpret_cast<u16*>(dst), reinterpret_cast<const u8*>(src), units);
         if (units <= 0)
         {
-            return u"";
+            delete[] dst;
+            return nullptr;
         }
 
         return dst;

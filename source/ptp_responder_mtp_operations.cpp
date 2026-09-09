@@ -191,11 +191,12 @@ namespace haze {
                 case PtpObjectPropertyCode_ObjectFileName:
                     {
                         const char *filename = std::strrchr(obj->GetName(), '/') + 1;
-                        std::u16string filename_utf16 = UTF8toUTF16(filename);
-                        if (filename_utf16 == u"") {
+                        char16_t *filename_utf16 = UTF8toUTF16(filename);
+                        if (filename_utf16 == nullptr) {
                             R_TRY(db.AddString(filename));
                         } else {
-                            R_TRY(db.AddString(filename_utf16.c_str()));
+                            R_TRY(db.AddString(filename_utf16));
+                            delete[] filename_utf16;
                         }
                     }
                     break;
@@ -326,11 +327,12 @@ namespace haze {
                         {
                             R_TRY(db.Add(PtpDataTypeCode_String));
                             const char *filename = std::strrchr(obj->GetName(), '/') + 1;
-                            std::u16string filename_utf16 = UTF8toUTF16(filename);
-                            if (filename_utf16 == u"") {
+                            char16_t *filename_utf16 = UTF8toUTF16(filename);
+                            if (filename_utf16 == nullptr) {
                                 R_TRY(db.AddString(filename));
                             } else {
-                                R_TRY(db.AddString(filename_utf16.c_str()));
+                                R_TRY(db.AddString(filename_utf16));
+                                delete[] filename_utf16;
                             }
                         }
                         break;
