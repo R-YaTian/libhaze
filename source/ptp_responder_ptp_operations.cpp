@@ -571,6 +571,10 @@ namespace haze {
         /* Write the success response. */
         // note: it can timeout here if the final write takes too long.
         log_write("Received object %u (%s), total size %ld\n\n\n", m_send_object_id, obj->GetName(), offset);
+
+        /* Read the trailing zero-length packet if the data ended on a packet boundary. */
+        R_TRY(dp.Finalize());
+
         R_RETURN(this->WriteResponse(PtpResponseCode_Ok));
     }
 
