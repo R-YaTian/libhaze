@@ -92,6 +92,7 @@ struct ThreadData {
 
     void SetReadResult(Result result) {
         R_DISCARD(read_result = result);
+        condvarWakeAll(std::addressof(can_write));
         if (R_FAILED(result)) {
             ueventSignal(&uevent);
         }
@@ -99,6 +100,7 @@ struct ThreadData {
 
     void SetWriteResult(Result result) {
         R_DISCARD(write_result = result);
+        condvarWakeAll(std::addressof(can_read));
         ueventSignal(&uevent);
     }
 
@@ -171,8 +173,6 @@ auto ThreadData::GetResults() volatile -> Result {
 void ThreadData::WakeAllThreads() {
     condvarWakeAll(std::addressof(can_read));
     condvarWakeAll(std::addressof(can_write));
-
-    mutexUnlock(std::addressof(mutex));
 }
 
 bool ThreadData::IsWriteBufFull() {
@@ -180,7 +180,7 @@ bool ThreadData::IsWriteBufFull() {
 
     // use condvar instead of waiting a set time as the buffer may be freed immediately.
     // however, to avoid deadlocks, we still need a timeout
-    if (!write_buffers.ringbuf_free()) {
+    if (!write_buffers.ringbuf_free() && write_running && R_SUCCEEDED(GetResults())) {
         if (R_FAILED(condvarWaitTimeout(std::addressof(can_read), std::addressof(mutex), 1e+8))) { // 100ms
             return true;
         }
@@ -193,13 +193,14 @@ Result ThreadData::SetWriteBuf(std::vector<u8>& buf, s64 size) {
     buf.resize(size);
 
     SCOPED_MUTEX(std::addressof(mutex));
-    if (!write_buffers.ringbuf_free()) {
+    while (!write_buffers.ringbuf_free()) {
+        R_TRY(GetResults());
         if (!write_running) {
             R_SUCCEED();
         }
 
         haze::log_write("SetWriteBuf: waiting for space...\n");
-        R_TRY(condvarWait(std::addressof(can_read), std::addressof(mutex)));
+        condvarWaitTimeout(std::addressof(can_read), std::addressof(mutex), 1e+8);
         haze::log_write("SetWriteBuf: got space!\n");
     }
 
@@ -210,14 +211,15 @@ Result ThreadData::SetWriteBuf(std::vector<u8>& buf, s64 size) {
 
 Result ThreadData::GetWriteBuf(std::vector<u8>& buf_out, s64& off_out) {
     SCOPED_MUTEX(std::addressof(mutex));
-    if (!write_buffers.ringbuf_size()) {
+    while (!write_buffers.ringbuf_size()) {
+        R_TRY(GetResults());
         if (!read_running) {
             buf_out.resize(0);
             R_SUCCEED();
         }
 
         haze::log_write("GetWriteBuf: waiting for data...\n");
-        R_TRY(condvarWait(std::addressof(can_write), std::addressof(mutex)));
+        condvarWaitTimeout(std::addressof(can_write), std::addressof(mutex), 1e+8);
         haze::log_write("GetWriteBuf: got data!\n");
     }
 
@@ -235,19 +237,34 @@ Result ThreadData::Read(void* buf, s64 size, u64* bytes_read) {
 
 // read thread reads all data from rfunc.
 Result ThreadData::readFuncInternal() {
-    ON_SCOPE_EXIT{ read_running = false; };
+    ON_SCOPE_EXIT{
+        read_running = false;
+        condvarWakeAll(std::addressof(can_write));
+    };
+
+    const auto applet_type = appletGetAppletType();
+    const bool is_application = applet_type == AppletType_Application || applet_type == AppletType_SystemApplication;
+    const size_t max_slow_buf_size = is_application ? (16ULL * 1024 * 1024) : (4ULL * 1024 * 1024);
 
     // the main buffer which data is read into.
     std::vector<u8> buf;
     buf.reserve(this->read_buffer_size);
     bool slow_mode{};
 
-    while (this->read_offset < this->write_size && R_SUCCEEDED(this->GetResults())) {
+    while (this->read_offset < this->write_size && R_SUCCEEDED(this->GetResults()) && this->write_running) {
+        if (slow_mode && buf.size() >= max_slow_buf_size) {
+            R_TRY(this->SetWriteBuf(buf, buf.size()));
+            buf.clear();
+            if (!this->write_running || R_FAILED(this->GetResults())) {
+                break;
+            }
+        }
+
         // this will wait for max 100ms until the buffer has space.
         const auto is_write_full = this->IsWriteBufFull();
 
         // check if the write thread returned early, usually due to an error.
-        if (is_write_full && !write_running) {
+        if ((is_write_full && !write_running) || R_FAILED(this->GetResults())) {
             haze::log_write("ReadFunc: write thread exited, stopping read thread\n");
             break;
         }
@@ -279,7 +296,6 @@ Result ThreadData::readFuncInternal() {
         }
 
         // when we have left slow mode, flush.
-        // todo: check buffer size so that it doesn't grow too large.
         if (!slow_mode) {
             R_TRY(this->SetWriteBuf(buf, buf.size()));
             buf.clear();
@@ -287,7 +303,7 @@ Result ThreadData::readFuncInternal() {
     }
 
     // flush buffer if needed.
-    if (!buf.empty()) {
+    if (!buf.empty() && this->write_running && R_SUCCEEDED(this->GetResults())) {
         haze::log_write("ReadFunc: flushing final buffer of size %zu\n", buf.size());
         R_TRY(this->SetWriteBuf(buf, buf.size()));
     }
@@ -297,7 +313,10 @@ Result ThreadData::readFuncInternal() {
 
 // write thread writes data to wfunc.
 Result ThreadData::writeFuncInternal() {
-    ON_SCOPE_EXIT{ write_running = false; };
+    ON_SCOPE_EXIT{
+        write_running = false;
+        condvarWakeAll(std::addressof(can_read));
+    };
 
     std::vector<u8> buf;
     buf.reserve(this->read_buffer_size);

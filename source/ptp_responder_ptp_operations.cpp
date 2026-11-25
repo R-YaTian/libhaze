@@ -18,6 +18,7 @@
 #include <haze/ptp_data_parser.hpp>
 #include <haze/ptp_responder_types.hpp>
 #include "haze/threaded_file_transfer.hpp"
+#include <limits>
 
 namespace haze {
 
@@ -482,42 +483,73 @@ namespace haze {
         R_UNLESS(data_header.code == m_request_header.code,         haze::ResultOperationNotSupported());
         R_UNLESS(data_header.trans_id == m_request_header.trans_id, haze::ResultOperationNotSupported());
 
+        bool finalized = false;
+        auto drain_recoverable = [&](Result err) -> Result {
+            R_TRY_CATCH(err) {
+                R_CATCH_MODULE(fs) {
+                    if (!finalized) {
+                        finalized = true;
+                        R_TRY(dp.Finalize());
+                    }
+                }
+                R_CATCH(haze::ResultInvalidObjectId, haze::ResultInvalidArgument, haze::ResultDeviceBusy) {
+                    if (!finalized) {
+                        finalized = true;
+                        R_TRY(dp.Finalize());
+                    }
+                }
+            } R_END_TRY_CATCH;
+            R_RETURN(err);
+        };
+
         /* Check if we know about the object. If we don't, it's an error. */
         auto * const obj = m_object_database.GetObjectById(m_send_object_id);
-        R_UNLESS(obj != nullptr, haze::ResultInvalidObjectId());
+        if (obj == nullptr) {
+            R_RETURN(drain_recoverable(haze::ResultInvalidObjectId()));
+        }
         log_write("\n\n\nReceiving object %u (%s)\n", m_send_object_id, obj->GetName());
 
         /* Lock the object as a file. */
         File file;
-        R_TRY(Fs(obj).OpenFile(obj->GetName(), FileOpenMode_WRITE, std::addressof(file)));
+        if (const Result rc = Fs(obj).OpenFile(obj->GetName(), FileOpenMode_WRITE, std::addressof(file)); R_FAILED(rc)) {
+            R_RETURN(drain_recoverable(rc));
+        }
         log_write("Opened file %s\n", obj->GetName());
 
-        /* Ensure we maintain a clean state on exit. */
-        ON_SCOPE_EXIT { Fs(obj).CloseFile(std::addressof(file)); };
+        bool file_open = true;
+        auto close_file = [&]() {
+            if (file_open) {
+                file_open = false;
+                Fs(obj).CloseFile(std::addressof(file));
+            }
+        };
 
-        /* Dummy file size for the threaded transfer. */
-        u64 file_size = 4_GB;
+        /* Ensure we maintain a clean state on exit. */
+        ON_SCOPE_EXIT { close_file(); };
+
+        /* Dummy file size for the threaded transfer when length is unknown (>4GB). */
+        s64 file_size = std::numeric_limits<s64>::max();
         u64 expected_file_size = 0;
         u64 offset = 0;
 
         if (m_send_prop_list) {
-            file_size = m_send_prop_list->size;
-            expected_file_size = file_size;
-            log_write("File size from property list: %ld\n", file_size);
+            file_size = static_cast<s64>(std::min<u64>(m_send_prop_list->size, std::numeric_limits<s64>::max()));
+            expected_file_size = m_send_prop_list->size;
+            log_write("File size from property list: %llu\n", static_cast<unsigned long long>(expected_file_size));
         } else {
-            if (data_header.length >= sizeof(PtpUsbBulkContainer)) {
+            if (data_header.length >= sizeof(PtpUsbBulkContainer) && data_header.length != 0xFFFFFFFFu) {
                 /* Got the real file size. */
-                file_size = data_header.length - sizeof(PtpUsbBulkContainer);
-                expected_file_size = file_size;
-                log_write("File size from data header: %ld\n", file_size);
+                file_size = static_cast<s64>(data_header.length - sizeof(PtpUsbBulkContainer));
+                expected_file_size = static_cast<u64>(file_size);
+                log_write("File size from data header: %llu\n", static_cast<unsigned long long>(expected_file_size));
             } else {
-                log_write("File size unknown, starting at 0\n");
+                log_write("File size unknown, streaming until EOT\n");
             }
         }
 
         /* Truncate the file to the received size. */
         ON_SCOPE_EXIT{
-            if (offset < expected_file_size) {
+            if (file_open && offset < expected_file_size) {
                 R_DISCARD(Fs(obj).SetFileSize(std::addressof(file), offset));
             }
         };
@@ -527,7 +559,7 @@ namespace haze {
 
         bool is_done = false;
 
-        R_TRY(sphaira::thread::Transfer(file_size,
+        const Result transfer_rc = sphaira::thread::Transfer(file_size,
             [this, &dp, &is_done](void* data, s64 off, s64 size, u64* bytes_read) -> Result {
                 if (is_done) {
                     *bytes_read = 0;
@@ -566,7 +598,14 @@ namespace haze {
                 offset += size;
                 R_SUCCEED();
             }, sphaira::thread::BUFFER_SIZE_WRITE
-        ));
+        );
+        if (R_FAILED(transfer_rc)) {
+            if (file_open && offset < expected_file_size) {
+                R_DISCARD(Fs(obj).SetFileSize(std::addressof(file), offset));
+            }
+            close_file();
+            R_RETURN(drain_recoverable(transfer_rc));
+        }
 
         /* Write the success response. */
         // note: it can timeout here if the final write takes too long.
@@ -574,6 +613,10 @@ namespace haze {
 
         /* Read the trailing zero-length packet if the data ended on a packet boundary. */
         R_TRY(dp.Finalize());
+        finalized = true;
+
+        /* Flush buffered writes before sending the response. */
+        R_TRY(Fs(obj).FlushFile(std::addressof(file)));
 
         R_RETURN(this->WriteResponse(PtpResponseCode_Ok));
     }

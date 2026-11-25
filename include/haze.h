@@ -100,6 +100,7 @@ struct FileSystemProxyImpl {
     virtual Result SetFileSize(File *file, s64 size) = 0;
     virtual Result ReadFile(File *file, s64 off, void *buf, u64 read_size, u64 *out_bytes_read) = 0;
     virtual Result WriteFile(File *file, s64 off, const void *buf, u64 write_size) = 0;
+    virtual Result FlushFile(File *file) { return 0; }
     virtual void CloseFile(File *file) = 0;
 
     virtual Result CreateDirectory(const char* path) = 0;
