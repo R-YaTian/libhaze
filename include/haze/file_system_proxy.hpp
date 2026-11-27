@@ -124,6 +124,11 @@ namespace haze {
                 R_RETURN(this->ForwardResult(m_filesystem->WriteFile(file, off, buf, write_size)));
             }
 
+            Result FlushFile(File *file) const {
+                R_UNLESS(!this->IsReadOnly(), ams::fs::ResultUnsupportedWriteForReadOnlyFileSystem());
+                R_RETURN(this->ForwardResult(m_filesystem->FlushFile(file)));
+            }
+
             void CloseFile(File *file) const {
                 m_filesystem->CloseFile(file);
             }
